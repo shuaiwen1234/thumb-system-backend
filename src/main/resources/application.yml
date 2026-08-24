@@ -1,0 +1,22 @@
+spring:
+  application.name: thumb-backend
+  mvc:
+    servlet:
+      path: /api
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/thumb_db?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false
+    username: root
+    password: 123456
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+server:
+  port: 80
+logging:
+  level:
+    com.wen: INFO
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
