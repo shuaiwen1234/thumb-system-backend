@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @NoArgsConstructor
 @Schema(description = "点赞实体")
+//这个实体记录的是点赞的用户以及对应的博客
 public class Thumb {
     /**
     点赞记录的id

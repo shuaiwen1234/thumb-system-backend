@@ -20,9 +20,9 @@ public class Blog {
     @TableId(type = IdType.AUTO)
     Long id;
     /**
-     * 用户id
+     * 用户id(作者)
      */
-    Long uerId;
+    Long userId;
     /**
      * 博客标题
      */
