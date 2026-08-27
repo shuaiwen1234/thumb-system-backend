@@ -8,6 +8,13 @@ spring:
     url: jdbc:mysql://localhost:3306/thumb_db?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false
     username: root
     password: 123456
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 1
+      timeout: 5000
+      password: 123456
 knife4j:
   enable: true
   setting:
@@ -20,3 +27,4 @@ logging:
 mybatis-plus:
   configuration:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+application.title: "文的点赞系统"

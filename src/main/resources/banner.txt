@@ -1,0 +1,27 @@
+${AnsiColor.BRIGHT_YELLOW}${AnsiStyle.BOLD}
+////////////////////////////////////////////////////////////////////
+//                          _ooOoo_                               //
+//                         o8888888o                              //
+//                         88" . "88                              //
+//                         (| ${AnsiColor.BRIGHT_RED}^_^${AnsiColor.BRIGHT_YELLOW} |)                              //
+//                         O\  =  /O                              //
+//                      ____/`---'\____                           //
+//                    .'  \\|     |//  `.                         //
+//                   /  \\|||  :  |||//  \                        //
+//                  /  _||||| -:- |||||-  \                       //
+//                  |   | \\\  -  /// |   |                       //
+//                  | \_|  ''\---/''  |   |                       //
+//                  \  .-\__  `-`  ___/-. /                       //
+//                ___`. .'  /--.--\  `. . ___                     //
+//              ."" '<  `.___\_<|>_/___.'  >'"".                  //
+//            | | :  `- \`.;`\ _ /`;.`/ - ` : | |                 //
+//            \  \ `-.   \_ __\ /__ _/   .-` /  /                 //
+//      ========`-.____`-.___\_____/___.-`____.-'========         //
+//                           `=---='                              //
+//      ${AnsiColor.CYAN}^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^        //
+//             ${AnsiColor.BRIGHT_GREEN}${AnsiStyle.BOLD}佛祖保佑       永不宕机      永无BUG${AnsiColor.BRIGHT_YELLOW}                   //
+////////////////////////////////////////////////////////////////////
+${AnsiColor.DEFAULT}
+${AnsiColor.BRIGHT_BLUE}  App Name    : ${application.title} (${spring-boot.version})
+  Active Profile : ${spring.profiles.active:default}
+${AnsiColor.DEFAULT}
