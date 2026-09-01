@@ -23,7 +23,7 @@ import java.util.Arrays;
 /**
  * @author zhangziwen
  */
-@Service
+@Service(value="thumbService")
 public class ThumbServiceRedisImpl extends ServiceImpl<ThumbMapper, Thumb> implements ThumbService {
     @Autowired
     private ThumbMapper thumbMapper;
