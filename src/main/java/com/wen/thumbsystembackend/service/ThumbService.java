@@ -19,7 +19,9 @@ public interface ThumbService extends IService<Thumb> {
      * @param blogId 博客id
      * @return 插入点赞记录表之后返回的记录的id
      */
-    public Long doThumbOperation(Long userId, Long blogId);
+    default public Long doThumbOperation(Long userId, Long blogId){
+        return -1L;
+    };
 
     /**
      * 取消点赞
@@ -34,7 +36,9 @@ public interface ThumbService extends IService<Thumb> {
      * @param blogId 博客id
      * @return
      */
-    public Boolean undoThumbOperation(Long userId, Long blogId);
+    default public Boolean undoThumbOperation(Long userId, Long blogId){
+        return Boolean.FALSE;
+    }
 
     /**
      * 使用redis判断是否存在对应的点赞记录
@@ -43,6 +47,9 @@ public interface ThumbService extends IService<Thumb> {
      * @param blogId 博客id
      * @return
      */
-    Boolean hasThumb(Long userId,Long blogId);
+    default Boolean hasThumb(Long userId,Long blogId){
+        return false;
+    }
+
 
 }

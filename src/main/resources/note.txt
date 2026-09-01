@@ -9,3 +9,9 @@
 博客在发布时也会存到redis中(除了内容字段)并设置一个月的TTL 用来判断是否是热门博客
 结构: "blog:" + blogId , RedisBlog
 这里对数据库进行更新之后redis也要同步更新而不是直接删除 因为有的业务是通过redis中有没有数据来进行业务判断的
+
+
+8.31
+用户进行点赞和取消点赞操作时都直接操作数据库 人数过多会导致性能下降 考虑使用redis替换数据库并定时把redis里的数据批量写入到mysql
+redis的数据结构(点赞的临时表) Hash  key: thumb:temp:时间    field: {userId}:{blogId}   value: 1(点赞) -1(取消点赞) 0(无操作)
+在使用redis统一保存点赞记录再统一刷到数据库之后 redis保存点赞记录对应的结构改为: key: "thumb:"+userId , field: blogId , value: 1

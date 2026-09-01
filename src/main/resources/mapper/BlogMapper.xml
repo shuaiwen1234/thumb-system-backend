@@ -4,4 +4,16 @@
 <mapper namespace="com.wen.thumbsystembackend.mapper.BlogMapper">
 
 
+    <update id="batchUpdateThumbCount">
+        update blog set thumb_count = thumb_count +
+        case id
+        <foreach collection="map.entrySet()" index="key" item="value">
+            when #{key} then #{value}
+        </foreach>
+        end
+        where id in
+        <foreach collection="map.keySet()" item="id" separator="," open="(" close=")">
+            #{id}
+        </foreach>
+    </update>
 </mapper>

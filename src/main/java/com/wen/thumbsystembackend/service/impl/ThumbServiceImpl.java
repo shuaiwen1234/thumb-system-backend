@@ -24,7 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
-@Service
+//因为@Autowired自动注入当类型相同时 会按名称注入
+@Service(value = "thumbServiceDB")
 public class ThumbServiceImpl extends ServiceImpl<ThumbMapper, Thumb> implements ThumbService {
     @Autowired
     private ThumbMapper thumbMapper;

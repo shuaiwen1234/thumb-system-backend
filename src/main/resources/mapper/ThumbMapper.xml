@@ -4,4 +4,17 @@
 <mapper namespace="com.wen.thumbsystembackend.mapper.ThumbMapper">
 
 
+    <insert id="saveBatch">
+        insert into thumb(user_id,blog_id) values
+        <foreach collection="list" item="map" separator=",">
+            (#{map.userId},#{map.blogId})
+        </foreach>
+    </insert>
+
+    <delete id="deleteBatch">
+        delete from thumb where (user_id,blog_id) in
+        <foreach collection="list" item="map" separator="," open="(" close=")">
+            (#{map.userId},#{map.blogId})
+        </foreach>
+    </delete>
 </mapper>
