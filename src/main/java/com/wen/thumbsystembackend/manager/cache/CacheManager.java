@@ -2,6 +2,7 @@ package com.wen.thumbsystembackend.manager.cache;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.wen.thumbsystembackend.constant.ThumbConstant;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -82,6 +83,7 @@ public class CacheManager {
         //如果是HotKey且不在本地缓存中 就把他加到本地缓存中
         if(result.isHotKey()){
             localCache.put(onlyKey, object);
+            //如果有被他挤出来的key则就代表这个key现在不在TopK中 从本地删除× 不删了 caffeine里的cache满了会自动删除最近没用到的
         }
         return  object;
 

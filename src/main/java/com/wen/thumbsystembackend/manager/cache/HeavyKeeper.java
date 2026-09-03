@@ -142,6 +142,7 @@ public class HeavyKeeper implements TopK {
         synchronized (minHeap) {
             boolean isHot = false;
             String expelled = null;
+            Node expelledNode = null;
             //判断自己是否在榜上
             Optional<Node> existing = minHeap.stream()
                     .filter(n -> n.key.equals(key))
@@ -160,8 +161,9 @@ public class HeavyKeeper implements TopK {
                     Node newNode = new Node(key, maxCount);
                     if (minHeap.size() >= k) {
                         //此时最小堆里的Node达到了K个 弹出Node.count最小的那个 即优先级最高的
-                        expelled = minHeap.poll().key;
-                        expelledQueue.offer(new Item(expelled, maxCount));
+                        expelledNode = minHeap.poll();
+                        expelled = expelledNode.key;
+                        expelledQueue.offer(new Item(expelledNode.key, expelledNode.count));
                     }
                     //此时为最小堆里的Node个数还没到K个
                     minHeap.add(newNode);
