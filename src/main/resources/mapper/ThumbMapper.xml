@@ -5,7 +5,7 @@
 
 
     <insert id="saveBatch">
-        insert into thumb(user_id,blog_id) values
+        insert ignore into thumb(user_id,blog_id) values
         <foreach collection="list" item="map" separator=",">
             (#{map.userId},#{map.blogId})
         </foreach>
