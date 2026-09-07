@@ -1,4 +1,4 @@
-package com.wen.thumbsystembackend.configuration;
+package com.wen.thumbsystembackend.config;
 
 import com.wen.thumbsystembackend.interceptors.UserLoginInterceptor;
 import org.springframework.beans.factory.annotation.Autowired;

@@ -89,7 +89,7 @@ public class HeavyKeeper implements TopK {
     @Override
     public AddResult add(String key, int increment) {
         byte[] keyBytes = key.getBytes();
-        //把这个key的字节数组转为hash 计算出桶内的指纹
+        //把这个key的字节数组转为hash(节省内存) 计算出桶内的指纹
         long itemFingerprint = hash(keyBytes);
         //当前key的峰值热度 即最大热度
         int maxCount = 0;

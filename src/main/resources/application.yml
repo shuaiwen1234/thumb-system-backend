@@ -5,7 +5,7 @@ spring:
       path: /api
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/thumb_db?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false
+    url: jdbc:mysql://localhost:3306/thumb_db?useUnicode=true&characterEncoding=UTF-8&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useSSL=false
     username: root
     password: 123456
   data:
@@ -21,6 +21,27 @@ spring:
           min-idle: 0  #最小空闲连接数
           max-active: 8  #最大活跃连接数
           max-wait: 100ms  #没有连接可用时最大的等待时长
+  rabbitmq:
+    host: 192.168.75.128
+    port: 5672
+    virtual-host: /thumbSystem
+    username: RabbitMQ
+    password: RabbitMQ
+    template:
+      retry:
+        enabled: true
+        max-interval: 10000ms # 连接时的最大等待时长
+        initial-interval: 1000ms # 最大重试次数
+        multiplier: 1 # 失败的等待时长倍数，下次等待时长 = multiplier * last-interval
+    listener:
+      simple:
+        retry:
+          enabled: true
+          initial-interval: 1000ms
+          multiplier: 1 # 失败的等待时长倍数，下次等待时长 = multiplier * last-interval
+          max-attempts: 3 # 最大重试次数
+          stateless: false # true无状态；false有状态。如果业务中包含事务，这里改为false
+
 knife4j:
   enable: true
   setting:

@@ -10,11 +10,24 @@
             (#{map.userId},#{map.blogId})
         </foreach>
     </insert>
+    <insert id="insertIgnoreThumbEventList">
+        insert ignore into thumb(user_id,blog_id,create_time) values
+               <foreach collection="list" item="thumbEvent" separator=",">
+                   (#{thumbEvent.userId},#{thumbEvent.blogId},#{thumbEvent.eventTime})
+               </foreach>
+    </insert>
 
     <delete id="deleteBatch">
         delete from thumb where (user_id,blog_id) in
         <foreach collection="list" item="map" separator="," open="(" close=")">
             (#{map.userId},#{map.blogId})
+        </foreach>
+    </delete>
+    <delete id="deleteByThumbEventList">
+        delete from thumb where
+        (user_id,blog_id) in
+        <foreach collection="list" item="thumbEvent" separator="," open="(" close=")">
+            (#{thumbEvent.userId},#{thumbEvent.blogId})
         </foreach>
     </delete>
 </mapper>

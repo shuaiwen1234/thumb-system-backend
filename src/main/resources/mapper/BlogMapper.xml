@@ -2,6 +2,18 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
 <mapper namespace="com.wen.thumbsystembackend.mapper.BlogMapper">
+    <update id="addThumbCountByMap">
+        update blog set thumb_count = thumb_count +
+        case id
+        <foreach collection="map" index="key" item="value">
+            when #{key} then #{value}
+        </foreach>
+        end
+        where id in
+        <foreach collection="map.keySet()" item="id" separator="," open="(" close=")">
+            #{id}
+        </foreach>
+    </update>
 
 
     <update id="batchUpdateThumbCount">

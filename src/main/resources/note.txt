@@ -38,3 +38,10 @@ Node（内部形态：key + count）
 Item（公开形态：key + count）
 这里本地缓存的结构为 "thumb:3:233"	0（Long）	用户3 对这233博客点过赞又取消了（标记 0）
 当用户取消点赞时 不应该从本地缓存中删除 因为他还是热点数据 所以规定value为0的代表没点赞
+
+
+9.6使用消息队列替换点赞或者取消点赞批量存redis再批量落库
+写入redis之后直接返回 通过消息队列异步的落库
+exchangeName: thumb.direct
+queueName: thumb.like.queue
+queueName: thumb.unlike.queue
