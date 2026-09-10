@@ -39,7 +39,9 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper,Blog> implements Blo
 
     @Override
     public BaseResponse<BlogVO> getBlogVO(Long blogId) {
-        Long userId = UserContext.getUser().getUserId();
+        //未登录时放行浏览，但点赞状态一律为 false
+        User loginUser = UserContext.getUser();
+        Long userId = loginUser == null ? null : loginUser.getUserId();
 
         //根据博客id获取博客
         Blog blog = blogMapper.selectById(blogId);
@@ -48,6 +50,12 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper,Blog> implements Blo
         }
         BlogVO vo = new BlogVO();
         BeanUtils.copyProperties(blog,vo);
+
+        //未登录用户：可浏览但无点赞状态，直接返回
+        if(userId == null){
+            vo.setHasThumb(false);
+            return ResultUtils.success(vo);
+        }
 
         //检查当前用户是否给该博客点赞了
         //先判断当前博客是否是热门博客 若是且redis中能查到数据 则是为点赞
@@ -99,11 +107,13 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper,Blog> implements Blo
 
     @Override
     public BaseResponse<List<BlogVO>> getBlogVOList() {
-        Long userId = UserContext.getUser().getUserId();
+        //未登录时放行浏览，点赞状态一律为 false
+        User loginUser = UserContext.getUser();
+        Long userId = loginUser == null ? null : loginUser.getUserId();
         //查询所有的博客
         List<Blog> blogs = blogMapper.selectList(null);
-        //查出现在登录的用户的点赞记录
-        List<Thumb> thumbs = thumbMapper.selectList(new LambdaQueryWrapper<Thumb>().eq(Thumb::getUserId, userId));
+        //查出现在登录的用户的点赞记录（未登录不查；eq(null) 会被 MyBatis-Plus 忽略从而查全量）
+        List<Thumb> thumbs = userId == null ? Collections.emptyList() : thumbMapper.selectList(new LambdaQueryWrapper<Thumb>().eq(Thumb::getUserId, userId));
         //点赞的博客的id的集合
         List<Long> collect = thumbs.stream().map(thumb -> thumb.getBlogId()).collect(Collectors.toList());
 

@@ -8,6 +8,9 @@ spring:
     url: jdbc:mysql://localhost:3306/thumb_db?useUnicode=true&characterEncoding=UTF-8&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useSSL=false
     username: root
     password: 123456
+    hikari:
+      maximum-pool-size: 30
+      minimum-idle: 5
   data:
     redis:
       host: localhost
@@ -18,11 +21,11 @@ spring:
       lettuce:
         pool:
           max-idle: 8  #最大空闲连接数
-          min-idle: 0  #最小空闲连接数
-          max-active: 8  #最大活跃连接数
-          max-wait: 100ms  #没有连接可用时最大的等待时长
+          min-idle: 4  #最小空闲连接数
+          max-active: 64  #最大活跃连接数
+          max-wait: 3000ms  #没有连接可用时最大的等待时长
   rabbitmq:
-    host: 192.168.75.128
+    host: localhost
     port: 5672
     virtual-host: /thumbSystem
     username: RabbitMQ
@@ -48,6 +51,11 @@ knife4j:
     language: zh_cn
 server:
   port: 80
+  tomcat:
+    threads:
+      max: 300
+      min-spare: 20
+    accept-count: 200
 logging:
   level:
     com.wen: INFO
