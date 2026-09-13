@@ -1,5 +1,6 @@
 package com.wen.thumbsystembackend.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.wen.thumbsystembackend.common.BaseResponse;
 import com.wen.thumbsystembackend.common.ResultUtils;
@@ -22,7 +23,9 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Service("thumbServiceMQ")
 public class ThumbServiceMQImpl extends ServiceImpl<ThumbMapper,Thumb> implements ThumbService {
@@ -34,6 +37,8 @@ public class ThumbServiceMQImpl extends ServiceImpl<ThumbMapper,Thumb> implement
     private CacheManager  cacheManager;
     @Autowired
     private BatchingRabbitTemplate batchingRabbitTemplate;
+    @Autowired
+    private ThumbMapper thumbMapper;
 
     @Override
     public BaseResponse<Boolean> doThumb(DoThumbRequest doThumbRequest) {
@@ -46,8 +51,20 @@ public class ThumbServiceMQImpl extends ServiceImpl<ThumbMapper,Thumb> implement
                 List.of(userThumbKey),
                 blogId);
         if(isThumb.equals(LuaStatusEnum.FAIL.getValue())){
+            // 增加热度
+            cacheManager.recordThumbHit(ThumbConstant.USER_THUMB_KEY_PREFIX+userId,blogId.toString(),1);
             throw new RuntimeException("该用户已点过赞");
         }
+        //仅当 Redis 无记录(可能过期)时才查 DB 兜底；Redis 明确为 0(未赞)时直接放行，避免与取消点赞的异步删库竞态
+        if(isThumb.equals(2L)){
+            Thumb thumb = thumbMapper.selectOne(new LambdaQueryWrapper<Thumb>().eq(Thumb::getBlogId, blogId).eq(Thumb::getUserId, userId));
+            if(thumb != null){
+                // 增加热度
+                cacheManager.recordThumbHit(ThumbConstant.USER_THUMB_KEY_PREFIX+userId,blogId.toString(),1);
+                throw new RuntimeException("该用户已点过赞");
+            }
+        }
+
         //构造点赞事件并向mq发布
         ThumbEvent thumbEvent = ThumbEvent.builder()
                 .userId(userId)
@@ -58,7 +75,9 @@ public class ThumbServiceMQImpl extends ServiceImpl<ThumbMapper,Thumb> implement
 
         //更新本地缓存(如果存在)
         cacheManager.putIfPresent(userThumbKey,blogId.toString(),1);
-        batchingRabbitTemplate.convertAndSend(MqConstant.THUMB_EXCHANGE_NAME, MqConstant.THUMB_DOTHUMB_BINDINGKEY,thumbEvent);
+        batchingRabbitTemplate.convertAndSend(MqConstant.THUMB_EXCHANGE_NAME, MqConstant.THUMB_BINDING_KEY, thumbEvent);
+        // 增加热度
+        cacheManager.recordThumbHit(ThumbConstant.USER_THUMB_KEY_PREFIX+userId,blogId.toString(),1);
         return ResultUtils.success(true);
     }
 
@@ -72,7 +91,18 @@ public class ThumbServiceMQImpl extends ServiceImpl<ThumbMapper,Thumb> implement
                 List.of(userThumbKey),
                 blogId);
         if(isUnThumb.equals(LuaStatusEnum.FAIL.getValue())){
+            // 增加热度
+            cacheManager.recordThumbHit(ThumbConstant.USER_THUMB_KEY_PREFIX+userId,blogId.toString(),0);
             throw new RuntimeException("该用户还未点赞");
+        }
+        //仅当 Redis 无记录(可能过期)时才查 DB 兜底；Redis 明确为 1(已赞)时直接放行，避免与点赞的异步落库竞态
+        if(isUnThumb.equals(2L)){
+            Thumb thumb = thumbMapper.selectOne(new LambdaQueryWrapper<Thumb>().eq(Thumb::getBlogId, blogId).eq(Thumb::getUserId, userId));
+            if(thumb == null){
+                // 增加热度
+                cacheManager.recordThumbHit(ThumbConstant.USER_THUMB_KEY_PREFIX+userId,blogId.toString(),0);
+                throw new RuntimeException("该用户还未点赞");
+            }
         }
         //构造点赞事件并向mq发送
         ThumbEvent unThmbEvent = ThumbEvent.builder()
@@ -84,7 +114,9 @@ public class ThumbServiceMQImpl extends ServiceImpl<ThumbMapper,Thumb> implement
 
         //更新本地缓存(如果存在)
         cacheManager.putIfPresent(userThumbKey,blogId.toString(),0);
-        batchingRabbitTemplate.convertAndSend(MqConstant.THUMB_EXCHANGE_NAME,MqConstant.THUMB_UNDOTHUMB_BINDINGKEY,unThmbEvent);
+        batchingRabbitTemplate.convertAndSend(MqConstant.THUMB_EXCHANGE_NAME, MqConstant.THUMB_BINDING_KEY, unThmbEvent);
+        // 增加热度
+        cacheManager.recordThumbHit(ThumbConstant.USER_THUMB_KEY_PREFIX+userId,blogId.toString(),0);
         return ResultUtils.success(true);
     }
 
@@ -98,15 +130,41 @@ public class ThumbServiceMQImpl extends ServiceImpl<ThumbMapper,Thumb> implement
         String userThumbKey = RedisKeyUtil.getUserThumbKey(userId);
         String key = blogId.toString();
         Object result = cacheManager.get(userThumbKey, key);
+        Long value = null;
+        //因为本地缓存的存活时间比redis里的缓存的存活时间短 且更新本地缓存和更新redis是同步的 即他们同时刷新存活时长
+        //所以能查到本地缓存redis里就一定有数据
         if(result != null){
-            //判断是否点过赞
-            if(Long.valueOf(result.toString()).equals(ThumbConstant.UN_THUMB_CONSTANT)){
-                //此时为未点赞
-                return false;
-            }
-            return true;
+            value = Long.valueOf(result.toString());
         }
-        return redistemplate.opsForHash().hasKey(userThumbKey, key);
 
+        if(result == null){
+            //本地缓存没有 去查redis
+            result = redistemplate.opsForHash().get(userThumbKey, key);
+            if(result != null){
+                value = Long.valueOf(result.toString());
+            }
+        }
+
+        if(result == null){
+            //redis没有去查数据库
+            Thumb thumb = thumbMapper.selectOne(new LambdaQueryWrapper<Thumb>().eq(Thumb::getBlogId, blogId).eq(Thumb::getUserId, userId));
+            if(thumb == null){
+                value = ThumbConstant.UN_THUMB_CONSTANT;
+            }else {
+                value = ThumbConstant.THUMB_CONSTANT;
+            }
+            redistemplate.opsForHash().put(userThumbKey, key, value);
+        }
+        redistemplate.expire(userThumbKey,10,TimeUnit.DAYS);
+        cacheManager.recordThumbHit(ThumbConstant.USER_THUMB_KEY_PREFIX+userId,blogId.toString(),value);
+        return value.equals(ThumbConstant.THUMB_CONSTANT);
+
+    }
+
+    @Override
+    public List<Long> thumbedList(Long userId) {
+
+        List<Long> blogIds = thumbMapper.selectThumbedBlogList(userId);
+        return  blogIds;
     }
 }

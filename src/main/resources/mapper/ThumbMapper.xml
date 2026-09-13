@@ -30,4 +30,7 @@
             (#{thumbEvent.userId},#{thumbEvent.blogId})
         </foreach>
     </delete>
+    <select id="selectThumbedBlogList" resultType="java.lang.Long">
+        select blog_id from thumb where user_id = #{userId}
+    </select>
 </mapper>

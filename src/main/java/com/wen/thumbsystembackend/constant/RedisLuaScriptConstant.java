@@ -57,24 +57,32 @@ public class RedisLuaScriptConstant {
                     "    return 1  -- 返回 1 表示成功", Long.class
     );
 
-    public static final RedisScript<Long> THUMB_SCRIPT_MQ = new DefaultRedisScript<>("local userThumbKey = KEYS[1]  \n" +
+    public static final RedisScript<Long> THUMB_SCRIPT_MQ = new DefaultRedisScript<>(" local userThumbKey = KEYS[1]  \n" +
             " local blogId = ARGV[1]  \n" +
-            " -- 用户已经点赞\n" +
-            " if(redis.call(\"HEXISTS\", userThumbKey, blogId) == 1) then\n" +
-            "    return -1\n" +
-            "end\n" +
-            "-- 写入点赞数据\n" +
-            "redis.call(\"HSET\", userThumbKey, blogId, 1)\n" +
-            "return 1", Long.class);
+            "local exists = redis.call(\"HEXISTS\", KEYS[1], ARGV[1])  \n" +
+            "if exists == 1 then  \n" +
+            "   local v = tonumber(redis.call(\"HGET\", KEYS[1], ARGV[1]) or 0)  \n" +
+            "   if v == 1 then return -1 end  -- 值=1 真点过 -> 拒绝\n" +
+            "   redis.call(\"HSET\", KEYS[1], ARGV[1], 1)  \n" +
+            "   redis.call(\"EXPIRE\", KEYS[1], 864000)  \n" +
+            "   return 1  -- 值=0 明确未赞 -> 直接点赞\n" +
+            "end  \n" +
+            "redis.call(\"HSET\", KEYS[1], ARGV[1], 1)  \n" +
+            "redis.call(\"EXPIRE\", KEYS[1], 864000)  \n" +
+            "return 2  -- Redis 无记录(可能过期) -> 交给 DB 兜底", Long.class);
 
     public static final RedisScript<Long> UN_THUMB_SCRIPT_MQ = new DefaultRedisScript<>("local userThumbKey = KEYS[1]  \n" +
             "local blogId = ARGV[1]  \n" +
-            "-- 用户未点赞\n" +
-            "if(redis.call(\"HEXISTS\", userThumbKey, blogId) == 0) then\n" +
-            "    return -1\n" +
-            "end\n" +
-            "-- 删除点赞记录\n" +
-            "redis.call(\"HDEL\", userThumbKey, blogId)\n" +
-            "return 1\n", Long.class);
+            "local exists = redis.call(\"HEXISTS\", KEYS[1], ARGV[1])  \n" +
+            "if exists == 1 then  \n" +
+            "   local v = tonumber(redis.call(\"HGET\", KEYS[1], ARGV[1]) or -1)  \n" +
+            "   if v == 0 then return -1 end  -- 值=0 未赞 -> 拒绝取消\n" +
+            "   redis.call(\"HSET\", KEYS[1], ARGV[1], 0)  \n" +
+            "   redis.call(\"EXPIRE\", KEYS[1], 864000)  \n" +
+            "   return 1  -- 值=1 明确已赞 -> 直接取消\n" +
+            "end  \n" +
+            "redis.call(\"HSET\", KEYS[1], ARGV[1], 0)  \n" +
+            "redis.call(\"EXPIRE\", KEYS[1], 864000)  \n" +
+            "return 2  -- Redis 无记录(可能过期) -> 交给 DB 兜底", Long.class);
 
 }

@@ -1,6 +1,7 @@
 package com.wen.thumbsystembackend.manager.cache;
 
 import cn.hutool.core.util.HashUtil;
+import org.springframework.data.redis.core.convert.Bucket;
 
 import java.util.*;
 import java.util.concurrent.BlockingQueue;
@@ -86,6 +87,13 @@ public class HeavyKeeper implements TopK {
         this.random = new Random();
         this.total = 0;
     }
+
+    /**
+     *
+     * @param key 博客的id
+     * @param increment 热度的涨幅(一般是1)
+     * @return
+     */
     @Override
     public AddResult add(String key, int increment) {
         byte[] keyBytes = key.getBytes();
@@ -96,6 +104,7 @@ public class HeavyKeeper implements TopK {
 
         for (int i = 0; i < depth; i++) {
             //计算出这个key在hash桶数组里的下标(即数组下标)
+            //加i是为了每轮循环让这个key位于不同列的桶里
             int bucketNumber = Math.abs(hash(keyBytes)+i) % width;
             //取出这个桶
             Bucket bucket = buckets[i][bucketNumber];

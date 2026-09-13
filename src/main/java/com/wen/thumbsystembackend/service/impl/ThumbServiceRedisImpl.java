@@ -1,15 +1,10 @@
 package com.wen.thumbsystembackend.service.impl;
 import cn.hutool.core.date.DateUtil;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.wen.thumbsystembackend.common.BaseResponse;
 import com.wen.thumbsystembackend.common.ResultUtils;
-import com.wen.thumbsystembackend.common.redis.RedisBlog;
-import com.wen.thumbsystembackend.common.redis.RedisLogicData;
-import com.wen.thumbsystembackend.constant.BlogConstant;
 import com.wen.thumbsystembackend.constant.RedisLuaScriptConstant;
 import com.wen.thumbsystembackend.constant.ThumbConstant;
-import com.wen.thumbsystembackend.entity.Blog;
 import com.wen.thumbsystembackend.entity.Thumb;
 import com.wen.thumbsystembackend.entity.dto.DoThumbRequest;
 import com.wen.thumbsystembackend.enums.LuaStatusEnum;
@@ -19,13 +14,10 @@ import com.wen.thumbsystembackend.mapper.ThumbMapper;
 import com.wen.thumbsystembackend.service.ThumbService;
 import com.wen.thumbsystembackend.utils.RedisKeyUtil;
 import com.wen.thumbsystembackend.utils.UserContext;
-import org.springframework.aop.framework.AopContext;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.Arrays;
 
 /**

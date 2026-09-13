@@ -18,4 +18,11 @@ public interface ThumbMapper extends BaseMapper<Thumb> {
     long insertIgnoreThumbEventList(@Param("list")List<ThumbEvent> list);
 
     long deleteByThumbEventList(@Param("list")List<ThumbEvent> list);
+
+    /**
+     * 查询这个用户点过赞的博客的id
+     * @param userId
+     * @return
+     */
+    List<Long> selectThumbedBlogList(Long userId);
 }

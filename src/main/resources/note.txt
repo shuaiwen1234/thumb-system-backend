@@ -41,7 +41,19 @@ Item（公开形态：key + count）
 
 
 9.6使用消息队列替换点赞或者取消点赞批量存redis再批量落库
-写入redis之后直接返回 通过消息队列异步的落库
+写入redis之后直接返回 通过消息队列异步的落库(攒够一批数据或者间隔十秒再发送)
 exchangeName: thumb.direct
 queueName: thumb.like.queue
 queueName: thumb.unlike.queue
+
+使用heavyKeeper来获取k个热门的博客
+本地缓存(caffeine)存的是这n个热门博客的点赞记录
+原来的点赞记录存在reids里就不删了 这里进行优化
+给这个点赞记录设置一个10天的TTL 期间再次访问则刷新存活时间
+同步修改lua脚本之后的判断是否点赞逻辑(因为现在的redis里没数据也可能是因为数据过期了)
+热门博客的点赞记录还是保存在本地缓存里
+
+通过redis来记录每篇博客的点赞数这种经常变化的数据(考虑)
+将热门博客保存在redis中 新发布的博客也保存到redis(30天)
+redis再创建一个hash结构用来保存热门博客的点赞数 mq每次在刷到数据库时也要同步刷新redis
+本地缓存存的是完整的Blog对象 redis存的是RedisBlog以及count 也就是blog和点赞数分开保存 点赞或者取消点赞时只更新点赞数

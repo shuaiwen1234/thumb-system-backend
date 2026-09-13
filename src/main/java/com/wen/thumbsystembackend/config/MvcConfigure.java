@@ -19,7 +19,6 @@ public class MvcConfigure implements WebMvcConfigurer {
         registry.addInterceptor(userLoginInterceptor)
                 .excludePathPatterns(
                         "/user/login",            // 业务公开接口（拦截器匹配 servlet 相对路径，无 /api 前缀）
-                        "/blog/**",               // 博客浏览放行：未登录可看列表/详情（点赞仍需登录）
                         "/doc.html",              // knife4j 页面
                         "/webjars/**",            // knife4j 的 js/css
                         "/v3/api-docs/**",        // springdoc 文档数据

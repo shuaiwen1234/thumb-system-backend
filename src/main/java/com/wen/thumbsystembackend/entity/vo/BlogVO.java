@@ -7,8 +7,12 @@ import java.time.LocalDateTime;
 @Data
 public class BlogVO {  
       
-    private Long id;  
-  
+    private Long id;
+    /**
+     * 该博客的作者id
+     */
+    private Long userId;
+
     /**  
      * 标题  
      */  

@@ -33,11 +33,11 @@ public class MQConfig {
      */
     @Bean
     public BatchingRabbitTemplate batchingRabbitTemplate(ConnectionFactory connectionFactory) {
-        // 1. 达到 10 条消息时触发发送
+        // 1. 达到 1000 条消息时触发发送
         int batchSize = 1000;
-        // 2. 达到 10KB 内存占用时触发发送
+        // 2. 达到 100KB 内存占用时触发发送
         int bufferLimit = 102400;
-        // 3. 距离上一条消息超过 1 秒时强制触发发送（防止消息积压不发）
+        // 3. 距离上一条消息超过 10 秒时强制触发发送（防止消息积压不发）
         long timeout = 10000;
 
         BatchingStrategy batchingStrategy = new SimpleBatchingStrategy(batchSize, bufferLimit, timeout);

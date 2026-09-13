@@ -1,21 +1,20 @@
 package com.wen.thumbsystembackend.common.redis;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableId;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
-/**
- * @author zhangziwen
- */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
+@Schema(description = "redis保存的博客实体")
 public class RedisBlog {
-
+    /**
+     * 博客的id
+     */
     Long id;
     /**
      * 用户id(作者)
@@ -30,9 +29,9 @@ public class RedisBlog {
      */
     String coverImg;
     /**
-     * 博客的点赞数
+     * 博客内容
      */
-    Long thumbCount;
+    String content;
     /**
      * 创建时间
      */

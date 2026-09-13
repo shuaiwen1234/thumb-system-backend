@@ -2,8 +2,13 @@ package com.wen.thumbsystembackend.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.wen.thumbsystembackend.common.BaseResponse;
+import com.wen.thumbsystembackend.entity.Blog;
 import com.wen.thumbsystembackend.entity.Thumb;
 import com.wen.thumbsystembackend.entity.dto.DoThumbRequest;
+import com.wen.thumbsystembackend.entity.vo.BlogVO;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public interface ThumbService extends IService<Thumb> {
     /**
@@ -50,6 +55,13 @@ public interface ThumbService extends IService<Thumb> {
     default Boolean hasThumb(Long userId,Long blogId){
         return false;
     }
+
+    /**
+     * 查询出这个用户点过赞的博客id
+     * @param userId
+     * @return
+     */
+    default List<Long > thumbedList(Long userId){return new ArrayList<>();};
 
 
 }

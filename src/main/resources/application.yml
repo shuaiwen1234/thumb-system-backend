@@ -47,7 +47,7 @@ knife4j:
   setting:
     language: zh_cn
 server:
-  port: 80
+  port: 8080
 logging:
   level:
     com.wen: INFO
@@ -74,3 +74,8 @@ management:
       show-details: always
 
 application.title: "文的点赞系统"
+
+#查询博客的uri 用于放行请求 使没登陆的用户也能查看(如果直接配置在配置类里过滤就会让登录的用户也获取不到userId 所以这里在拦截器里配置)
+blog:
+  one: "/api/blog"
+  list: "/api/blog/list"

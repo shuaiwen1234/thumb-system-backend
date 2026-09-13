@@ -9,4 +9,5 @@ public interface ThumbConstant {
     Long UN_THUMB_CONSTANT = 0L;
 
 
+    Long THUMB_CONSTANT = 1L;
 }
