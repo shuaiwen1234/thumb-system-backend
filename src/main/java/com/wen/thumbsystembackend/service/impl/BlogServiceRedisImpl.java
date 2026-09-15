@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.wen.thumbsystembackend.common.BaseResponse;
 import com.wen.thumbsystembackend.common.ResultUtils;
 import com.wen.thumbsystembackend.constant.BlogConstant;
+import com.wen.thumbsystembackend.constant.ThumbConstant;
 import com.wen.thumbsystembackend.entity.Blog;
 import com.wen.thumbsystembackend.common.redis.RedisBlog;
 import com.wen.thumbsystembackend.entity.Thumb;
@@ -25,6 +26,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionSynchronization;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -74,6 +77,7 @@ public class BlogServiceRedisImpl extends ServiceImpl<BlogMapper,Blog> implement
     /**
      * 走三级缓存拿博客本体（不含 hasThumb，按用户单独算）
      * 本地 -> Redis -> DB；只有 DB 回源时才异步写回 Redis
+     * 还负责重建缓存
      */
     private Blog loadBlog(Long blogId) {
         String fid = blogId.toString();
@@ -81,10 +85,10 @@ public class BlogServiceRedisImpl extends ServiceImpl<BlogMapper,Blog> implement
         //1. 本地缓存
         Blog blog = (Blog) cacheManager.getBlog(fid);
 
-        //2. Redis
+        //2. Redis（独立 key：blog:{id} / blog:thumb:count:{id}）
         if (blog == null) {
-            RedisBlog rb = (RedisBlog) redisTemplate.opsForHash().get(BlogConstant.BLOG_KEY_PREFIX, fid);
-            Object countObj = redisTemplate.opsForHash().get(BlogConstant.BLOG_THUMB_COUNT_KEY_PREFIX, fid);
+            RedisBlog rb = (RedisBlog) redisTemplate.opsForValue().get(BlogConstant.BLOG_KEY_PREFIX + fid);
+            Object countObj = redisTemplate.opsForValue().get(BlogConstant.BLOG_THUMB_COUNT_KEY_PREFIX + fid);
             Long count = countObj == null ? null : Long.valueOf(countObj.toString());
             if (rb != null && count != null) {
                 blog = BeanUtil.copyProperties(rb, Blog.class);
@@ -108,8 +112,8 @@ public class BlogServiceRedisImpl extends ServiceImpl<BlogMapper,Blog> implement
             Long count = blog.getThumbCount();
             try {
                 THREAD_POOL.execute(() -> {
-                    redisTemplate.opsForHash().put(BlogConstant.BLOG_KEY_PREFIX, fid, rb);
-                    redisTemplate.opsForHash().put(BlogConstant.BLOG_THUMB_COUNT_KEY_PREFIX, fid, count);
+                    redisTemplate.opsForValue().set(BlogConstant.BLOG_KEY_PREFIX + fid, rb, 30, TimeUnit.DAYS);
+                    redisTemplate.opsForValue().set(BlogConstant.BLOG_THUMB_COUNT_KEY_PREFIX + fid, count, 30, TimeUnit.MINUTES);
                 });
             } catch (RejectedExecutionException e) {
                 //池满静默丢弃：写不回算了，下次查询再重建，绝不让异步任务反噬请求
@@ -144,10 +148,11 @@ public class BlogServiceRedisImpl extends ServiceImpl<BlogMapper,Blog> implement
                 ? new ArrayList<>()
                 : thumbService.thumbedList(userId);
 
-        // 3. 一次批量从 Redis 取博客本体 + 点赞数（N 次 hmget → 2 次）
-        List<Object> fids = blogIds.stream().map(String::valueOf).collect(Collectors.toList());
-        List<Object> blogObjs = redisTemplate.opsForHash().multiGet(BlogConstant.BLOG_KEY_PREFIX, fids);
-        List<Object> countObjs = redisTemplate.opsForHash().multiGet(BlogConstant.BLOG_THUMB_COUNT_KEY_PREFIX, fids);
+        // 3. 一次批量从 Redis 取博客本体 + 点赞数（独立 key，2 次 mget）
+        List<String> fullBlogKeys = blogIds.stream().map(id -> BlogConstant.BLOG_KEY_PREFIX + id).collect(Collectors.toList());
+        List<String> fullCountKeys = blogIds.stream().map(id -> BlogConstant.BLOG_THUMB_COUNT_KEY_PREFIX + id).collect(Collectors.toList());
+        List<Object> blogObjs = redisTemplate.opsForValue().multiGet(fullBlogKeys);
+        List<Object> countObjs = redisTemplate.opsForValue().multiGet(fullCountKeys);
 
         // 4. 命中进结果，miss 的 id 收集起来
         Map<Long, Blog> idToBlog = new LinkedHashMap<>();
@@ -177,8 +182,16 @@ public class BlogServiceRedisImpl extends ServiceImpl<BlogMapper,Blog> implement
             for (Blog b : missBlogs) {
                 Long id = b.getId();
                 idToBlog.put(id, b);
-                // 写回 + 记热度（复用 loadBlog 的写回逻辑）
-                cacheManager.recordBlogHit(id.toString(), b);
+
+                //因为这些数据既不在本地缓存也不在redis缓存里 重建缓存
+                try {
+                    THREAD_POOL.execute(() -> {
+                        redisTemplate.opsForValue().set(BlogConstant.BLOG_KEY_PREFIX + id, BeanUtil.copyProperties(b, RedisBlog.class), 30, TimeUnit.DAYS);
+                        redisTemplate.opsForValue().set(BlogConstant.BLOG_THUMB_COUNT_KEY_PREFIX + id, b.getThumbCount(), 30, TimeUnit.MINUTES);
+                    });
+                } catch (RejectedExecutionException e) {
+                    //池满静默丢弃：写不回算了，下次查询再重建，绝不让异步任务反噬请求
+                }
             }
         }
 
@@ -192,6 +205,8 @@ public class BlogServiceRedisImpl extends ServiceImpl<BlogMapper,Blog> implement
             BlogVO vo = BeanUtil.copyProperties(blog, BlogVO.class);
             vo.setHasThumb(userId != null && thumbedIds.contains(id));
             vos.add(vo);
+            // 写回 + 记热度（复用 loadBlog 的写回逻辑）
+            cacheManager.recordBlogHit(id.toString(), blog);
         }
         return ResultUtils.success(vos);
     }
@@ -211,11 +226,9 @@ public class BlogServiceRedisImpl extends ServiceImpl<BlogMapper,Blog> implement
         blogMapper.insert(blog);
         //新发布的博客会在redis中保存一个月
         RedisBlog redisBlog = BeanUtil.copyProperties(blog, RedisBlog.class);
-        redisTemplate.opsForHash().put(BlogConstant.BLOG_KEY_PREFIX, blog.getId().toString(), redisBlog);
-        redisTemplate.expire(BlogConstant.BLOG_KEY_PREFIX,30, TimeUnit.DAYS);
+        redisTemplate.opsForValue().set(BlogConstant.BLOG_KEY_PREFIX + blog.getId(), redisBlog, 30, TimeUnit.DAYS);
         //构造他的点赞计数器
-        redisTemplate.opsForHash().put(BlogConstant.BLOG_THUMB_COUNT_KEY_PREFIX, blog.getId().toString(),0L);
-        redisTemplate.expire(BlogConstant.BLOG_THUMB_COUNT_KEY_PREFIX,30, TimeUnit.MINUTES);
+        redisTemplate.opsForValue().set(BlogConstant.BLOG_THUMB_COUNT_KEY_PREFIX + blog.getId(), 0L, 30, TimeUnit.MINUTES);
         return blog.getId();
 
     }
@@ -250,6 +263,8 @@ public class BlogServiceRedisImpl extends ServiceImpl<BlogMapper,Blog> implement
                 vo.setHasThumb(false);
                 vos.add(vo);
             }
+            // 写回 + 记热度（复用 loadBlog 的写回逻辑）
+            cacheManager.recordBlogHit(blog.getId().toString(), blog);
         }
 
 
@@ -273,6 +288,11 @@ public class BlogServiceRedisImpl extends ServiceImpl<BlogMapper,Blog> implement
         List<Thumb> records = selectPage.getRecords();
         List<Long> blogIds = records.stream().map(Thumb::getBlogId).collect(Collectors.toList());
 
+        if (blogIds.isEmpty()) {
+            // 没有点赞 / 页码越界 → 直接返回空列表
+            return ResultUtils.success(new ArrayList<>());
+        }
+
         //根据这些博客id查询对应的博客
         List<Blog> blogs = blogMapper.selectList(new LambdaQueryWrapper<Blog>().in(Blog::getId, blogIds));
         //转换为对应的VO
@@ -280,6 +300,8 @@ public class BlogServiceRedisImpl extends ServiceImpl<BlogMapper,Blog> implement
             BlogVO vo = new BlogVO();
             BeanUtils.copyProperties(blog,vo);
             vo.setHasThumb(true);
+            // 写回 + 记热度（复用 loadBlog 的写回逻辑）
+            cacheManager.recordBlogHit(blog.getId().toString(), blog);
             return vo;
         }).collect(Collectors.toList());
 
@@ -303,7 +325,7 @@ public class BlogServiceRedisImpl extends ServiceImpl<BlogMapper,Blog> implement
         blog = (Blog)cacheManager.getBlog(blogId.toString());
         if(blog == null){
             //1.2 再尝试从redis里拿userId
-            RedisBlog object = (RedisBlog)redisTemplate.opsForHash().get(BlogConstant.BLOG_KEY_PREFIX, blogId.toString());
+            RedisBlog object = (RedisBlog) redisTemplate.opsForValue().get(BlogConstant.BLOG_KEY_PREFIX + blogId);
             blog = BeanUtil.copyProperties(object,Blog.class);
         }
         if(blog == null){
@@ -324,8 +346,9 @@ public class BlogServiceRedisImpl extends ServiceImpl<BlogMapper,Blog> implement
         //开启只有非null的字段才复制
         BeanUtil.copyProperties(blogVO,blog,CopyOptions.create().setIgnoreNullValue(true));
         cacheManager.putBlogIfPresent(blogId.toString(), blog);
-        redisTemplate.opsForHash().delete(BlogConstant.BLOG_KEY_PREFIX,blogId.toString());
+        //先改数据库再删除缓存
         blogMapper.updateById(blog);
+        redisTemplate.delete(BlogConstant.BLOG_KEY_PREFIX + blogId);
         //5. 返回
         return ResultUtils.success(true);
 
@@ -348,7 +371,7 @@ public class BlogServiceRedisImpl extends ServiceImpl<BlogMapper,Blog> implement
         blog = (Blog)cacheManager.getBlog(blogId.toString());
         if(blog == null){
             //1.2 再尝试从redis里拿userId
-            RedisBlog object = (RedisBlog)redisTemplate.opsForHash().get(BlogConstant.BLOG_KEY_PREFIX, blogId.toString());
+            RedisBlog object = (RedisBlog) redisTemplate.opsForValue().get(BlogConstant.BLOG_KEY_PREFIX + blogId);
             blog = BeanUtil.copyProperties(object,Blog.class);
         }
         if(blog == null){
@@ -378,17 +401,28 @@ public class BlogServiceRedisImpl extends ServiceImpl<BlogMapper,Blog> implement
         //删数据库该博客对应的点赞记录
         thumbMapper.delete(new LambdaQueryWrapper<Thumb>().eq(Thumb::getBlogId, blogId));
 
-        //5.1 删redis的点赞记录
-        for (Long uid : userIds) {
-            redisTemplate.opsForHash().delete("thumb:" + uid, blogId.toString());
-        }
-        //5.2 删redis缓存的博客 + 点赞数缓存
-        redisTemplate.opsForHash().delete(BlogConstant.BLOG_KEY_PREFIX,blogId.toString());
-        redisTemplate.opsForHash().delete(BlogConstant.BLOG_THUMB_COUNT_KEY_PREFIX,blogId.toString());
-        //5.3 顺带清本地缓存条目(包括点赞记录和博客)
-        cacheManager.deleteIfPresent(blogId.toString(),userIds);
+
+        //这个东西的作用大概是等方法执行到这里时就会先跳过这个继续执行 登记一个回调 等方法结束事务提交了由事务框架在同一个线程里按顺序调用
+        //5.1 跨系统的副作用(Redis / 本地缓存)必须等事务提交后再执行:
+        //提交前删,并发读因"快照读看不到未提交的删除"会把这篇文章重新写回缓存
+        //因为如果要是不这样的话 先删数据库然后直接删缓存的话等到缓存删完但是方法没结束 事务没提交 快照读读到旧数据之后就会回填到redis
+        //导致redis里缓存了旧的数据
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                //删 redis 的点赞记录
+                for (Long uid : userIds) {
+                    redisTemplate.opsForHash().delete(ThumbConstant.USER_THUMB_KEY_PREFIX + uid, blogId.toString());
+                }
+                //删 redis 缓存的博客 + 点赞数缓存
+                redisTemplate.delete(BlogConstant.BLOG_KEY_PREFIX + blogId);
+                redisTemplate.delete(BlogConstant.BLOG_THUMB_COUNT_KEY_PREFIX + blogId);
+                //清本地缓存条目(点赞记录和博客)
+                cacheManager.deleteIfPresent(blogId.toString(), userIds);
+            }
+        });
 
         //6. 返回
-         return ResultUtils.success(true);
+        return ResultUtils.success(true);
     }
 }

@@ -28,4 +28,20 @@
             #{id}
         </foreach>
     </update>
+    <update id="recountThumbCount">
+        update blog b set thumb_count =
+        (select count(*) from thumb t where t.blog_id = b.id)
+        where b.id in
+        <foreach collection="list" item="id" separator="," open="(" close=")">#{id}</foreach>
+    </update>
+    <select id="getBlogIdAndThumbCount" resultType="com.wen.thumbsystembackend.entity.Blog">
+        select id, thumb_count from blog where id in
+        <foreach collection="list" item="blogId" separator="," open="(" close=")">#{blogId}</foreach>
+    </select>
+    <select id="findDriftedBlogIds" resultType="java.lang.Long">
+        select b.id from blog as b
+        where b.thumb_count !=
+        (select count(*) from thumb as t where t.blog_id = b.id)
+    </select>
+
 </mapper>

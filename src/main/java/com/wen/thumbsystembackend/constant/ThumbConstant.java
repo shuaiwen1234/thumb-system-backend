@@ -10,4 +10,6 @@ public interface ThumbConstant {
 
 
     Long THUMB_CONSTANT = 1L;
+
+    Long THUMB_REDIS_MISSED = 2L;
 }

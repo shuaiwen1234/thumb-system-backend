@@ -7,11 +7,13 @@ import com.wen.thumbsystembackend.common.ResultUtils;
 import com.wen.thumbsystembackend.constant.MqConstant;
 import com.wen.thumbsystembackend.constant.RedisLuaScriptConstant;
 import com.wen.thumbsystembackend.constant.ThumbConstant;
+import com.wen.thumbsystembackend.entity.Blog;
 import com.wen.thumbsystembackend.entity.Thumb;
 import com.wen.thumbsystembackend.entity.dto.DoThumbRequest;
 import com.wen.thumbsystembackend.enums.LuaStatusEnum;
 import com.wen.thumbsystembackend.listener.thumb.ThumbEvent;
 import com.wen.thumbsystembackend.manager.cache.CacheManager;
+import com.wen.thumbsystembackend.mapper.BlogMapper;
 import com.wen.thumbsystembackend.mapper.ThumbMapper;
 import com.wen.thumbsystembackend.service.ThumbService;
 import com.wen.thumbsystembackend.utils.RedisKeyUtil;
@@ -39,12 +41,21 @@ public class ThumbServiceMQImpl extends ServiceImpl<ThumbMapper,Thumb> implement
     private BatchingRabbitTemplate batchingRabbitTemplate;
     @Autowired
     private ThumbMapper thumbMapper;
+    @Autowired
+    private BlogMapper blogMapper;
 
     @Override
     public BaseResponse<Boolean> doThumb(DoThumbRequest doThumbRequest) {
         Long userId = UserContext.getUser().getUserId();
         Long blogId = doThumbRequest.getBlogId();
         String userThumbKey = RedisKeyUtil.getUserThumbKey(userId);
+
+        //先检查博客是否存在
+        Blog blog = blogMapper.selectById(blogId);
+        if(blog==null){
+            throw new RuntimeException("该博客不存在 请稍后再试");
+        }
+
         //幂等性 这里通过数据库的唯一索引实现
         //判断用户是否点过赞 并点赞
         Long isThumb = redistemplate.execute(RedisLuaScriptConstant.THUMB_SCRIPT_MQ,
@@ -56,7 +67,7 @@ public class ThumbServiceMQImpl extends ServiceImpl<ThumbMapper,Thumb> implement
             throw new RuntimeException("该用户已点过赞");
         }
         //仅当 Redis 无记录(可能过期)时才查 DB 兜底；Redis 明确为 0(未赞)时直接放行，避免与取消点赞的异步删库竞态
-        if(isThumb.equals(2L)){
+        if(isThumb.equals(ThumbConstant.THUMB_REDIS_MISSED)){
             Thumb thumb = thumbMapper.selectOne(new LambdaQueryWrapper<Thumb>().eq(Thumb::getBlogId, blogId).eq(Thumb::getUserId, userId));
             if(thumb != null){
                 // 增加热度
@@ -96,7 +107,7 @@ public class ThumbServiceMQImpl extends ServiceImpl<ThumbMapper,Thumb> implement
             throw new RuntimeException("该用户还未点赞");
         }
         //仅当 Redis 无记录(可能过期)时才查 DB 兜底；Redis 明确为 1(已赞)时直接放行，避免与点赞的异步落库竞态
-        if(isUnThumb.equals(2L)){
+        if(isUnThumb.equals(ThumbConstant.THUMB_REDIS_MISSED)){
             Thumb thumb = thumbMapper.selectOne(new LambdaQueryWrapper<Thumb>().eq(Thumb::getBlogId, blogId).eq(Thumb::getUserId, userId));
             if(thumb == null){
                 // 增加热度
@@ -153,7 +164,17 @@ public class ThumbServiceMQImpl extends ServiceImpl<ThumbMapper,Thumb> implement
             }else {
                 value = ThumbConstant.THUMB_CONSTANT;
             }
-            redistemplate.opsForHash().put(userThumbKey, key, value);
+            /*
+            t0  hasThumb：本地 miss → Redis HGET → 没这个 field（过期了）→ 准备查 DB
+t1  doThumb（用户同时点了赞）：Lua 发现 field 不存在 → HSET 1 + EXPIRE → 发 INCR 事件
+                                                              ↑ field 此刻诞生了
+t2  hasThumb：DB 查询 → 查不到行（MQ 还没落库，最长 10 秒窗口）→ 算出 value = 0
+t3  hasThumb：回写
+       put        → 把 t1 写的 1 抹成 0  ❌
+       putIfAbsent→ 发现 field 已存在 → 跳过，1 保住 ✓
+             */
+            //所以用putIfAbsent
+            redistemplate.opsForHash().putIfAbsent(userThumbKey, key, value);
         }
         redistemplate.expire(userThumbKey,10,TimeUnit.DAYS);
         cacheManager.recordThumbHit(ThumbConstant.USER_THUMB_KEY_PREFIX+userId,blogId.toString(),value);
@@ -161,6 +182,11 @@ public class ThumbServiceMQImpl extends ServiceImpl<ThumbMapper,Thumb> implement
 
     }
 
+    /**
+     * 查询这个用户点过赞的博客的id
+     * @param userId 用户id
+     * @return
+     */
     @Override
     public List<Long> thumbedList(Long userId) {
 

@@ -51,6 +51,8 @@ public class MQConfig {
     }
 
     /**
+     * 消费者（接收端）批量处理工厂
+     * 之后在配置消费者时除了bindings = @QueueBinding(..)之外 再加一个containerFactory = "batchQueueTaskListenerContainerFactory"
      * 配置监听器工厂
      * @param configurer
      * @param connectionFactory
